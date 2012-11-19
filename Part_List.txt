@@ -1,0 +1,65 @@
+[ Type ] > Reference
+Url
+Shop > Price
+
+------------------------------------------------------------------------------
+Microcontroller card
+------------------------------------------------------------------------------
+Arduino MEGA 2560 REV 3
+http://www.lextronic.fr/P5072-platine-arduino-mega-2560-rev-3.html
+Lextronic	> 35.88 €
+
+
+------------------------------------------------------------------------------
+Shield
+------------------------------------------------------------------------------
+Arduino Ethernet Shield v3
+http://www.lextronic.fr/P4649-platine-ethernet-shield-pour-arduino-rev-3.html
+Lextronic > 28.88 €
+
+Data Logging Shield
+(no compatible with Arduino Mega without change)
+http://www.oomlout.co.uk/data-logging-shield-for-arduino-p-256.html
+Oomlout > 16 £ = 19.86 €
+
+
+------------------------------------------------------------------------------
+HIM
+------------------------------------------------------------------------------
+[Display] > LCD Display 16 x 2
+http://www.oomlout.co.uk/lcd-display-16-x-2-p-212.html
+Oomlout > 7 £ = 8.69 €
+
+
+------------------------------------------------------------------------------
+Sensors
+------------------------------------------------------------------------------
+[ Temperature & humidity ] > SHT15
+http://www.lextronic.fr/P1779-platine-devaluation-pour-capteur-sht15.html
+Lextronic > 41.94 €
+
+[ Temperature & humidity ] > DHT22
+http://www.lextronic.fr/P19987-capteur-dhumidite-et-temperature.html
+Lextronic > 12.90 €
+
+[ Temperature & pressure ] > BMP085 
+( 5V version )
+http://www.oomlout.co.uk/pressure-temperature-altitude-sensor-bmp085-p-279.html
+Oomlout > 12.92 £ = 19.24 €
+
+[ Temperature ] > TMP102
+http://www.lextronic.fr/P6468-capteur-de-temperature-tmp102.html
+Lextronic > 5.94 €
+
+[ Luminosity ] > TEMT6000
+http://www.lextronic.fr/P4170-platine-temt6000.html
+Lextronic > 4.95 €
+
+[ Rain Gauge + Anemometer + Wind Vane ] > SEN-08942
+http://www.lextronic.fr/P4452-capteurs-pour-station-meteo.html
+Lextronic > 89.90 €
+
+[ Raindrop ] > IBR273
+http://www.lextronic.fr/P1784-capteur-de-pluie-ibr273.html
+Lextronic > 5.45 €
+
