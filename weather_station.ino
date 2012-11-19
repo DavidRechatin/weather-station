@@ -3,6 +3,7 @@ String v = "0.10";
  
  Weather station with web connexion
  
+https://github.com/DavidRechatin/weather-station
  
  This software is free software; you can redistribute it and/or
  modify it under the terms of the GNU Lesser General Public
@@ -95,6 +96,8 @@ String v = "0.10";
  
  todo list :
  - define the pin numbers with const
+ - BMP085 pressure error
+
  */
 
 // include the library code:
