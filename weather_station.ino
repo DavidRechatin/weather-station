@@ -1,9 +1,9 @@
-String v = "0.10"; 
-/* Weather station v0.10 by David Réchatin  
+String v = "0.11"; 
+/* Weather station v0.11 by David Réchatin  
  
  Weather station with web connexion
  
-https://github.com/DavidRechatin/weather-station
+ https://github.com/DavidRechatin/weather-station
  
  This software is free software; you can redistribute it and/or
  modify it under the terms of the GNU Lesser General Public
@@ -91,19 +91,18 @@ https://github.com/DavidRechatin/weather-station
  v0.8 15/11/2012 : wind speed calculation with number of closure in each loop
  v0.9 15/11/2012 : wind speed advanced calculation 
  v0.10 15/11/2012 : rain height calculation 
- 
- 
+ v0.11 01/12/2012 : fix negative temperature of RHT03 (with update library DHT22.ccp v0.5) 
  
  todo list :
  - define the pin numbers with const
  - BMP085 pressure error
-
+ 
  */
 
 // include the library code:
 #include <Wire.h>
 #include <LiquidCrystal.h>    // require by LCD display
-#include <dht.h>              // require by RHT03
+#include <DHT22.h>            // require by RHT03
 #include <SHT1x.h>            // require by SHT15
 #include <Adafruit_BMP085.h>  // require by BMP085
 #include <SPI.h>              // require by ethernet shield
@@ -113,8 +112,8 @@ https://github.com/DavidRechatin/weather-station
 LiquidCrystal lcd(22, 23, 24, 25, 26, 27); // initialize the library with the numbers of the interface pins
 
 // initialize RHT03 (alias DHT22)
-dht DHT;
 #define DHT22_PIN 30
+DHT22 myDHT22(DHT22_PIN);
 
 // initialize SHT15
 #define rhtDataPin  28
@@ -229,10 +228,14 @@ void display_data()
   lcd.print(lcd2);  
 
   // SEND DATA to Serial
-  //Serial.println("-----------------------");
-  // Serial.println("## " + debug + " ##");    // for debuging
-  //Serial.println(lcd1);
-  //Serial.println(lcd2);
+  /*
+  Serial.println("-----------------------"); 
+   Serial.print("time= ");  
+   Serial.println(millis());
+   Serial.println("debug= ## " + debug + " ##");    // for debuging
+   Serial.println(lcd1);
+   Serial.println(lcd2);
+   */
 }
 
 // =============================================================
@@ -240,11 +243,11 @@ void display_data()
 String getWindVane() {
 #define NUMDIRS 16   // number of values of wind direction
   float windvaneVal[NUMDIRS] = {
-    73.5, 87.5, 108.5, 155, 215, 266.5, 348, 436, 533, 617.5, 668.5, 746, 809, 860, 918.5, 1023               }; // median values measured at the analog input  
+    73.5, 87.5, 108.5, 155, 215, 266.5, 348, 436, 533, 617.5, 668.5, 746, 809, 860, 918.5, 1023                     }; // median values measured at the analog input  
   char *windvaneStr[NUMDIRS] = {
-    "ONO","OSO", "O","NNO", "NO", "NNE", "N", "SSO", "SO", "ENE", "NE", "SSE", "S", "ESE", "SE", "E"               };  // wind directions
+    "ONO","OSO", "O","NNO", "NO", "NNE", "N", "SSO", "SO", "ENE", "NE", "SSE", "S", "ESE", "SE", "E"                     };  // wind directions
   float windvaneDeg[NUMDIRS] = {
-    0, 22.5, 45, 67.5, 90, 112.5, 135, 157.5, 180, 202.5, 225, 247.5, 270, 292.5, 315, 337.5               }; // degre direction  
+    0, 22.5, 45, 67.5, 90, 112.5, 135, 157.5, 180, 202.5, 225, 247.5, 270, 292.5, 315, 337.5                     }; // degre direction  
   unsigned int val; // analog input value
   byte x;  // index
 
@@ -289,6 +292,7 @@ float getRainHeight() {
 // BUTTON INTERUPTION
 void irq_button() // interrupt 5
 {
+  //  Serial.println("Button interuption !");
   disp_state++;   // next state of display
   if (disp_state == nMenu) {  // state no exist
     disp_state=0;  // loop to state 0
@@ -302,13 +306,15 @@ void irq_windspeed() // interrupt 0
 {
   countWindSpeed++; 
   lastContactTime = millis();
+  //  Serial.println("Wind speed sensor interuption !");
 }
 
 // =============================================================
 // RAIN GAUDE SENSOR INTERUPTION
 void irq_raingauge() // interrupt 1
-{
+{   
   countRain++; 
+  //  Serial.println("Rain gauge sensor interuption !");
 }
 
 // END FUNCTIONS
@@ -320,8 +326,8 @@ void irq_raingauge() // interrupt 1
 // BEGIN SETUP
 void setup()
 {
-  Serial.begin(9600);
-  //Serial.println("Setup begin");
+  //  Serial.begin(9600);
+  //  Serial.println("Setup begin");
   pinMode(40, OUTPUT); // define pin of LED reading sensors
 
   // interruption by button
@@ -336,7 +342,7 @@ void setup()
 
   // BMP085
   if (!bmp.begin()) {
-    //Serial.println("Could not find a valid BMP085 sensor, check wiring!");
+    //    Serial.println("Could not find a valid BMP085 sensor, check wiring!");
     while (1) {
     }
   }
@@ -353,7 +359,7 @@ void setup()
    }
    */
 
-  //Serial.println("Setup end");
+  //  Serial.println("Setup end");
 }
 // END SETUP
 // ###############################################################################
@@ -376,27 +382,39 @@ void loop()
   // read data > TEMT6000
   TEMT6000_l = float(analogRead(8))*100/1023;       // read analog input pin 8
 
-  // read data  > RHT03 (alias DTH22)
-  int chk = DHT.read22(DHT22_PIN);
-  /*
-  switch (chk)
-   {
-   case DHTLIB_OK:  
-   debug = "DHT22 > OK";
-   break;
-   case DHTLIB_ERROR_CHECKSUM:
-   debug = "DHT22 > Checksum error !";
-   break;
-   case DHTLIB_ERROR_TIMEOUT:
-   debug = "DHT22 > Time out error !";
-   break;
-   default:
-   debug = "DHT22 > Unknown error !";
-   break;
-   }
-   */
-  RTH03_t = DHT.temperature;
-  RTH03_h = DHT.humidity;
+  // read data > RHT03 (alias DHT22)
+  DHT22_ERROR_t errorCode; 
+  errorCode = myDHT22.readData(); 
+  switch(errorCode)
+  {
+  case DHT_ERROR_NONE:
+    RTH03_t = myDHT22.getTemperatureC();
+    RTH03_h = myDHT22.getHumidity();
+    break;
+  case DHT_ERROR_CHECKSUM:
+    debug += "check sum error ";
+    RTH03_t = myDHT22.getTemperatureC();
+    RTH03_h = myDHT22.getHumidity();
+    break;
+  case DHT_BUS_HUNG:
+    debug += "BUS Hung ";
+    break;
+  case DHT_ERROR_NOT_PRESENT:
+    debug += "Not Present ";
+    break;
+  case DHT_ERROR_ACK_TOO_LONG:
+    debug += "ACK time out ";
+    break;
+  case DHT_ERROR_SYNC_TIMEOUT:
+    debug += "Sync Timeout ";
+    break;
+  case DHT_ERROR_DATA_TIMEOUT:
+    debug += "Data Timeout ";
+    break;
+  case DHT_ERROR_TOOQUICK:
+    debug += "Polled to quick ";
+    break;
+  }
 
   // read data  > STH15
   SHT15_t = sht1x.readTemperatureC(); // it's slow !!
@@ -433,6 +451,9 @@ void loop()
 //
 // END OF FILE
 //
+
+
+
 
 
 
