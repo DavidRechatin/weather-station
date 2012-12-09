@@ -1,5 +1,5 @@
-String v = "0.11"; 
-/* Weather station v0.11 by David Réchatin  
+String v = "0.12"; 
+/* Weather station v0.12 by David Réchatin  
  
  Weather station with web connexion
  
@@ -87,15 +87,15 @@ String v = "0.11";
  v0.6 02/11/2012 : add windvane 
  + begin wind speed with irq_windspeed() and led wind sensor interrupt
  + begin rain gauge with irq_raingauge() and led rain gauge sensor interrupt 
- v0.7 06/11/2012 : add altiide of BMP085 sensor 
+ v0.7 06/11/2012 : add altitude of BMP085 sensor 
  v0.8 15/11/2012 : wind speed calculation with number of closure in each loop
  v0.9 15/11/2012 : wind speed advanced calculation 
  v0.10 15/11/2012 : rain height calculation 
  v0.11 01/12/2012 : fix negative temperature of RHT03 (with update library DHT22.ccp v0.5) 
- 
+ v0.12 09/12/2012 : BMP085 sensor : calculating pressure at sea level
+
  todo list :
  - define the pin numbers with const
- - BMP085 pressure error
  
  */
 
@@ -422,7 +422,9 @@ void loop()
 
   // read data  > BMP085
   BMP085_t = bmp.readTemperature();
-  BMP085_p = bmp.readPressure()/100;   // 1 mbar = 100 Pa 
+  // If altitude = 490m, then coefficient = 0.94326373664205762142   | pressure at sea level = pressure /((1-(altitude/44330))^5.255)
+  BMP085_p = bmp.readPressure()/0.94326373664205762142; // pressure at sea level in Pa
+  BMP085_p /= 100;   // pressure in mBar (1 mBar = 100 Pa)
 
   // read data > wind direction
   windVane = getWindVane();  
