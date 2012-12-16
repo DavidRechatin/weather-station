@@ -1,0 +1,30 @@
+###########################################
+# Syntax Coloring Map For CLCD
+###########################################
+
+###########################################
+# Datatypes (KEYWORD1)
+###########################################
+
+CLCD	KEYWORD1
+
+###########################################
+# Methods and Functions (KEYWORD2)
+###########################################
+init	KEYWORD2
+begin	KEYWORD2
+clear	KEYWORD2
+home	KEYWORD2
+on	KEYWORD2
+off	KEYWORD2
+backlight	KEYWORD2
+setCursor	KEYWORD2
+print	KEYWORD2
+blink_on	KEYWORD2
+blink_off	KEYWORD2
+cursor_on	KEYWORD2
+cursor_off	KEYWORD2
+setBacklight	KEYWORD2
+###########################################
+# Constants (LITERAL1)
+###########################################
