@@ -1,5 +1,5 @@
-String v = "0.14"; 
-/* Weather station v0.14 by David Réchatin  
+String v = "0.15"; 
+/* Weather station v0.15 by David Réchatin  
  
  Weather station with web connexion
  
@@ -64,16 +64,6 @@ String v = "0.14";
  * Pin1 connection of the button attached to +5V
  * Pin2 connection of the button to digital pin 18 > interrupt 5 with 10K resistor to ground
  
- LCD display 16x2 (Hitachi 44780 compatible)
- * LCD RS     pin to digital pin 22
- * LCD Enable pin to digital pin 23
- * LCD Data 4 pin to digital pin 24
- * LCD Data 5 pin to digital pin 25
- * LCD Data 6 pin to digital pin 26
- * LCD Data 7 pin to digital pin 27
- * LCD R/W pin to ground
- * LCD VO pin to potentiometer 10K between +5V and ground  (contrast)
- 
  LCD display 20x4 (Hitachi 44780 compatible - I2C bus)
  * 5V  connection of the sensor attached to +5V
  * S connection of the sensor attached to digital pin 21 > I2C bus
@@ -100,7 +90,8 @@ String v = "0.14";
  v0.11 01/12/2012 : fix negative temperature of RHT03 (with update library DHT22.ccp v0.5) 
  v0.12 09/12/2012 : BMP085 sensor : calculating pressure at sea level
  v0.13 10/12/2012 : define the pin numbers with const
- v0.14 16/12/2012 : add deported LCD display 4x20
+ v0.14 16/12/2012 : add deported LCD display 4x20 (i2c bus)
+ v0.15 02/02/2013 : remove LCD display 2x16 
  
  todo list :
  - SD card data logger
@@ -111,7 +102,6 @@ String v = "0.14";
 // -------------------------------------
 // Include the library code:
 #include <Wire.h>
-#include <LiquidCrystal.h>    // require by LCD display 2x16
 #include <CLCD.h>             // require by LCD display 4x20 bus I2C
 #include <DHT22.h>            // require by RHT03
 #include <SHT1x.h>            // require by SHT15
@@ -121,12 +111,6 @@ String v = "0.14";
 
 // -------------------------------------
 // Define PIN constant
-#define LCD_RS_PIN 22        // Lcd display
-#define LCD_ENABLE_PIN 23    // Lcd display
-#define LCD_DATA4_PIN 24     // Lcd display
-#define LCD_DATA5_PIN 25     // Lcd display
-#define LCD_DATA6_PIN 26     // Lcd display
-#define LCD_DATA7_PIN 27     // Lcd display
 #define TEMT6000_SIG_PIN 8   // TEMT6000 sensor > analog
 #define RHT03_DATA_PIN 30    // RHT03 sensor
 #define SHT15_DATA_PIN  28   // SHT15 sensor
@@ -140,17 +124,17 @@ String v = "0.14";
 #define BUTTON_IRQ_NUMBER 5       // PIN 18
 
 // Define other constant
-#define NUMBER_DISP_STATE 7    // number of menu on LCD display
+#define NUMBER_DISP_STATE 3    // number of menu on LCD display
 #define WAIT_LOOP 3000         // time (in milli second) of wait in loop cycle
 
 // -------------------------------------
 // Variable declaration
 String debug = "" ;       // for debuging
 int disp_state = 0;       // use by interrup 5 : function irq_button()
-String lcd1 = "" ;        // line 1 of LCD display
-String lcd2 = "" ;        // line 2 of LCD display
-String lcd3 = "" ;        // line 3 of LCD display
-String lcd4 = "" ;        // line 4 of LCD display
+String lcd_line1 ;        // line 1 of LCD display
+String lcd_line2 ;        // line 2 of LCD display
+String lcd_line3 ;        // line 3 of LCD display
+String lcd_line4 ;        // line 4 of LCD display
 char* tmp_char = "" ;     // temporary variable for increase code lisibilty
 String tmp_string = "" ;  // temporary variable for increase code lisibilty
 unsigned long time = 0 ;  // time
@@ -179,8 +163,7 @@ float h = 0 ;            // humdity
 
 // initialize sensor : RHT03 (alias DHT22)
 DHT22 myDHT22(RHT03_DATA_PIN);
-// initialize LCD display 2x16
-LiquidCrystal lcd(LCD_RS_PIN, LCD_ENABLE_PIN, LCD_DATA4_PIN, LCD_DATA5_PIN, LCD_DATA6_PIN, LCD_DATA7_PIN);
+
 // initialize LCD display 4x20 
 CLCD lcd_i2c(0x00,20,4);
 // initialize sensor : SHT15
@@ -201,11 +184,11 @@ EthernetClient client;   // Initialize the Ethernet client library
 // CALCULATION WIND DIRECTION
 String getWindVane() {
   float windvaneVal[16] = {
-    73.5, 87.5, 108.5, 155, 215, 266.5, 348, 436, 533, 617.5, 668.5, 746, 809, 860, 918.5, 1023        }; // median values measured at the analog input  
+    73.5, 87.5, 108.5, 155, 215, 266.5, 348, 436, 533, 617.5, 668.5, 746, 809, 860, 918.5, 1023              }; // median values measured at the analog input  
   char *windvaneStr[16] = {
-    "ONO","OSO", "O","NNO", "NO", "NNE", "N", "SSO", "SO", "ENE", "NE", "SSE", "S", "ESE", "SE", "E"        };  // wind directions
+    "ONO","OSO", "O","NNO", "NO", "NNE", "N", "SSO", "SO", "ENE", "NE", "SSE", "S", "ESE", "SE", "E"              };  // wind directions
   float windvaneDeg[16] = {
-    0, 22.5, 45, 67.5, 90, 112.5, 135, 157.5, 180, 202.5, 225, 247.5, 270, 292.5, 315, 337.5        }; // degre direction  
+    0, 22.5, 45, 67.5, 90, 112.5, 135, 157.5, 180, 202.5, 225, 247.5, 270, 292.5, 315, 337.5              }; // degre direction  
   unsigned int val; // analog input value
   byte x;  // index
 
@@ -295,7 +278,6 @@ void setup()
   attachInterrupt (RAINGAUGE_IRQ_NUMBER, irq_raingauge, FALLING);
 
   // LCD Display
-  lcd.begin(16, 2); 
   lcd_i2c.init(); 
   lcd_i2c.backlight();
 
@@ -398,52 +380,65 @@ void loop()
   // DISPLAY DATA
 
   // -------------------------------------
-  // Generate display data for lcd display 2x16
+  // Generate display data for lcd display
+  lcd_line1 = " " ;        // line 1 of LCD display
+  lcd_line2 = " " ;        // line 2 of LCD display
+  lcd_line3 = " " ;        // line 3 of LCD display
+  lcd_line4 = " " ;        // line 4 of LCD display
   switch (disp_state) { // state of information display
-  case 0: //
-    lcd1 = "Station meteo";
-    lcd2 = "version " + v; 
-    break;
-  case 1: 
-    lcd1 = "Temperature *C"; 
-    dtostrf(RTH03_t,2,1,tmp_char);  // conv. float to string
-    lcd2 = tmp_char; 
-    lcd2 += " ";
-    dtostrf(SHT15_t,2,1,tmp_char);  // conv. float to string
-    lcd2 += tmp_char;  
-    lcd2 += " ";
-    dtostrf(BMP085_t,2,1,tmp_char);  // conv. float to string
-    lcd2 += tmp_char;   
-    break;
-  case 2: 
-    lcd1 = "Humidite %";
+  case 0: // defaut display
+    lcd_line1 = "T:"; 
+    t = (RTH03_t + SHT15_t + BMP085_t) / 3;
+    dtostrf(t,2,1,tmp_char);  // conv. float to string
+    lcd_line1 += tmp_char; 
+    lcd_line1 += "*C";
+
+    lcd_line2 = "P:";
+    dtostrf(BMP085_p,4,1,tmp_char);  // conv. float to string
+    lcd_line2 += tmp_char; 
+    lcd_line2 += "mBar";  
+
+    lcd_line2 += " L:";    
+    dtostrf(TEMT6000_l,2,1,tmp_char);  // conv. float to string
+    lcd_line2 += tmp_char; 
+    lcd_line2 += "%";   
+
+    lcd_line3 = "V:";
+    dtostrf(windSpeed,2,1,tmp_char);  // conv. float to string
+    lcd_line3 += tmp_char;
+    lcd_line3 += "km/h >> " + windVane;
+
+    lcd_line4 = "H:";    
+    h = (RTH03_h + SHT15_h) / 2;
     dtostrf(RTH03_h,2,1,tmp_char);  // conv. float to string
-    lcd2 = tmp_char;  
-    lcd2 += " ";
+    lcd_line4 += tmp_char; 
+    lcd_line4 += "%";
+
+    lcd_line4 += " Pl:";
+    dtostrf(rainHeight,2,2,tmp_char);  // conv. float to string
+    lcd_line4 += tmp_char;
+    lcd_line4 += " mm";
+    break;
+  case 1: // detail of Temperature and Humidity
+    lcd_line1 = "Temperature *C"; 
+    dtostrf(RTH03_t,2,1,tmp_char);  // conv. float to string
+    lcd_line2 = tmp_char; 
+    lcd_line2 += " ";
+    dtostrf(SHT15_t,2,1,tmp_char);  // conv. float to string
+    lcd_line2 += tmp_char;  
+    lcd_line2 += " ";
+    dtostrf(BMP085_t,2,1,tmp_char);  // conv. float to string
+    lcd_line2 += tmp_char;   
+    lcd_line3 = "Humidite %";
+    dtostrf(RTH03_h,2,1,tmp_char);  // conv. float to string
+    lcd_line4 = tmp_char;  
+    lcd_line4 += " ";
     dtostrf(SHT15_h,2,1,tmp_char);  // conv. float to string
-    lcd2 += tmp_char;  
+    lcd_line4 += tmp_char;  
     break;
   case 3: 
-    lcd1 = "Pression mBar";
-    dtostrf(BMP085_p,4,1,tmp_char);  // conv. float to string
-    lcd2 = tmp_char;   
-    break;
-  case 4: 
-    lcd1 = "Luminosite %";    
-    dtostrf(TEMT6000_l,2,2,tmp_char);  // conv. float to string
-    lcd2 = tmp_char;   
-    break;
-  case 5: 
-    lcd1 = "Vent";
-    dtostrf(windSpeed,2,1,tmp_char);  // conv. float to string
-    lcd2 = tmp_char;
-    lcd2 += " km/h >> " + windVane;
-    break;
-  case 6: 
-    lcd1 = "Pluie";
-    dtostrf(rainHeight,2,2,tmp_char);  // conv. float to string
-    lcd2 = tmp_char;
-    lcd2 += " mm";
+    lcd_line1 = "Station meteo";
+    lcd_line2 = "version " + v; 
     break;
   default: 
     disp_state = 0; // security...
@@ -451,58 +446,15 @@ void loop()
 
   // -------------------------------------
   // Send data to LCD display
-  lcd.clear();  // clear and set the cursor to column 0, line 1
-  lcd.print(lcd1);
-  lcd.setCursor(0, 1);  // (col,row) > set the cursor to column 0, line 2
-  lcd.print(lcd2);  
-
-  delay(50);
-
-  // -------------------------------------
-  // Generate display data for lcd display 4x20
-  lcd1 = "T:"; 
-  t = (RTH03_t + SHT15_t + BMP085_t) / 3;
-  dtostrf(t,2,1,tmp_char);  // conv. float to string
-  lcd1 += tmp_char; 
-  lcd1 += "*C";
-
-  lcd2 = "P:";
-  dtostrf(BMP085_p,4,1,tmp_char);  // conv. float to string
-  lcd2 += tmp_char; 
-  lcd2 += "mBar";  
-
-  lcd2 += " L:";    
-  dtostrf(TEMT6000_l,2,1,tmp_char);  // conv. float to string
-  lcd2 += tmp_char; 
-  lcd2 += "%";   
-
-  lcd3 = "V:";
-  dtostrf(windSpeed,2,1,tmp_char);  // conv. float to string
-  lcd3 += tmp_char;
-  lcd3 += "km/h >> " + windVane;
-
-  lcd4 = "H:";    
-  h = (RTH03_h + SHT15_h) / 2;
-  dtostrf(RTH03_h,2,1,tmp_char);  // conv. float to string
-  lcd4 += tmp_char; 
-  lcd4 += "%";
-
-  lcd4 += " Pl:";
-  dtostrf(rainHeight,2,2,tmp_char);  // conv. float to string
-  lcd4 += tmp_char;
-  lcd4 += " mm";
-
-  // -------------------------------------
-  // Send data to LCD display
   lcd_i2c.clear();
   lcd_i2c.setCursor(0, 0);  // (row,col)
-  lcd_i2c.print(lcd1);
+  lcd_i2c.print(lcd_line1);
   lcd_i2c.setCursor(1, 0);  // (row,col)
-  lcd_i2c.print(lcd2); 
+  lcd_i2c.print(lcd_line2); 
   lcd_i2c.setCursor(2, 0);  // (row,col)
-  lcd_i2c.print(lcd3); 
+  lcd_i2c.print(lcd_line3); 
   lcd_i2c.setCursor(3, 0);  // (row,col)
-  lcd_i2c.print(lcd4); 
+  lcd_i2c.print(lcd_line4); 
   lcd_i2c.cursor_off();
 
   // =============================================================
@@ -519,6 +471,9 @@ void loop()
 //
 // END OF FILE
 //
+
+
+
 
 
 
