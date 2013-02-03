@@ -1,5 +1,5 @@
-String v = "0.17"; 
-/* Weather station v0.17 by David Réchatin  
+String v = "0.18"; 
+/* Weather station v0.18 by David Réchatin  
  
  Weather station with web connexion
  
@@ -94,6 +94,7 @@ String v = "0.17";
  v0.15 02/02/2013 : remove LCD display 2x16
  v0.16 03/02/2013 : change windVane data storage
  v0.17 03/02/2013 : rewriting function : generate and send sata to LCD display
+ v0.18 03/02/2013 : adjust RHT03 temperature value
  
  todo list :
  - SD card data logger
@@ -146,6 +147,7 @@ volatile int countRain = 0 ;                 // count rain gauge contact
 // Measure variables declaration
 float TEMT6000_l = 0 ;   // luminosity
 float RTH03_t = 0 ;      // temperature
+float RTH03_t_adjust = 0.7 ;      // temperature adjust
 float RTH03_h = 0 ;      // humdity
 float SHT15_t = 0 ;      // temperature
 float SHT15_h = 0 ;      // humdity
@@ -439,8 +441,8 @@ void loop()
   switch(errorCode)
   {
   case DHT_ERROR_NONE:
-    RTH03_t = myDHT22.getTemperatureC();
-    RTH03_h = myDHT22.getHumidity();
+    RTH03_t = RTH03_t_adjust + myDHT22.getTemperatureC();
+    RTH03_h = RTH03_t_adjust + myDHT22.getHumidity();
     break;
   case DHT_ERROR_CHECKSUM:
     debug += "check sum error ";
