@@ -1,5 +1,5 @@
-String v = "0.18"; 
-/* Weather station v0.18 by David Réchatin  
+String v = "0.19"; 
+/* Weather station v0.19 by David Réchatin  
  
  Weather station with web connexion
  
@@ -67,7 +67,10 @@ String v = "0.18";
  LCD display 20x4 (Hitachi 44780 compatible - I2C bus)
  * 5V  connection of the sensor attached to +5V
  * S connection of the sensor attached to digital pin 21 > I2C bus
- * D  connection of the sensor attached to digital pin 20 > I2C bus
+ * D  connection of the sensor at3
+ 
+ 3
+ tached to digital pin 20 > I2C bus
  * GND  connection of the sensor attached to ground
  
  http://www.rechatin.com/
@@ -95,6 +98,7 @@ String v = "0.18";
  v0.16 03/02/2013 : change windVane data storage
  v0.17 03/02/2013 : rewriting function : generate and send sata to LCD display
  v0.18 03/02/2013 : adjust RHT03 temperature value
+ v0.19 03/02/2013 : add 'Data logger SD card' shield with DS1307 clock > active DS1307
  
  todo list :
  - SD card data logger
@@ -111,6 +115,7 @@ String v = "0.18";
 #include <Adafruit_BMP085.h>  // require by BMP085
 #include <SPI.h>              // require by ethernet shield
 #include <Ethernet.h>         // require by ethernet shield
+#include <RTClib.h>           // require by DS1307 on Data logger SD card shield
 
 // -------------------------------------
 // Define PIN constant
@@ -136,13 +141,11 @@ String debug = "" ;       // for debuging
 int disp_state = 0;       // use by interrup 5 : function irq_button()
 char buffer[8];           // buffer for LCD display
 char* tmp_char = " " ;     // temporary variable for increase code lisibilty
-unsigned long time = 0 ;  // time
-int i = 0;                // use by loop 'for'
 volatile int countwindSpeed = 0 ;            // count wind speed contact
 unsigned long firstContactTime = 0 ;         // first time of wind speed interupt
 volatile unsigned long lastContactTime = 0 ; // last time of wind speed interupt
 volatile int countRain = 0 ;                 // count rain gauge contact
-
+DateTime now ;
 
 // Measure variables declaration
 float TEMT6000_l = 0 ;   // luminosity
@@ -163,11 +166,14 @@ float h = 0 ;            // humdity
 // -------------------------------------
 // INITIALIZE SENSORS, LCD AND SHIELDS
 
+// initialize clock : DS1307
+RTC_DS1307 RTC;
+
 // initialize sensor : RHT03 (alias DHT22)
 DHT22 myDHT22(RHT03_DATA_PIN);
 
 // initialize LCD display 4x20 
-CLCD lcd_i2c(0x00,20,4);
+CLCD lcd_i2c(0x06,20,4);
 // initialize sensor : SHT15
 SHT1x sht1x(SHT15_DATA_PIN, SHT15_SCK_PIN);
 // initialize sensor : BMP085
@@ -188,11 +194,11 @@ EthernetClient client;   // Initialize the Ethernet client library
 
 void getWindVane() {
   float windvaneArrayVal[16] = {
-    73.5, 87.5, 108.5, 155, 215, 266.5, 348, 436, 533, 617.5, 668.5, 746, 809, 860, 918.5, 1023                                      }; // median values measured at the analog input  
+    73.5, 87.5, 108.5, 155, 215, 266.5, 348, 436, 533, 617.5, 668.5, 746, 809, 860, 918.5, 1023                                            }; // median values measured at the analog input  
   char *windvaneArrayStr[16] = {
-    "ONO","OSO", "O","NNO", "NO", "NNE", "N", "SSO", "SO", "ENE", "NE", "SSE", "S", "ESE", "SE", "E"                                      };  // wind directions
+    "ONO","OSO", "O","NNO", "NO", "NNE", "N", "SSO", "SO", "ENE", "NE", "SSE", "S", "ESE", "SE", "E"                                            };  // wind directions
   float windvaneArrayDeg[16] = {
-    0, 22.5, 45, 67.5, 90, 112.5, 135, 157.5, 180, 202.5, 225, 247.5, 270, 292.5, 315, 337.5                                      }; // degre direction  
+    0, 22.5, 45, 67.5, 90, 112.5, 135, 157.5, 180, 202.5, 225, 247.5, 270, 292.5, 315, 337.5                                            }; // degre direction  
   unsigned int val; // analog input value
   byte x;  // index
 
@@ -251,6 +257,16 @@ void display_lcd() {
     lcd_i2c.print(buffer); 
     lcd_i2c.setCursor(0, 8);  // (row,col)
     lcd_i2c.print("*C");  
+    lcd_i2c.setCursor(0, 12);  // (row,col)
+    lcd_i2c.print(now.hour()); 
+    lcd_i2c.setCursor(0, 14);  // (row,col)
+    lcd_i2c.print(":"); 
+    lcd_i2c.setCursor(0, 15);  // (row,col)
+    lcd_i2c.print(now.minute()); 
+    lcd_i2c.setCursor(0, 17);  // (row,col)
+    lcd_i2c.print(":");  
+    lcd_i2c.setCursor(0, 18);  // (row,col)
+    lcd_i2c.print(now.second()); 
     // line 2 
     lcd_i2c.setCursor(1, 0);  // (row,col)
     lcd_i2c.print("P:");    
@@ -333,7 +349,19 @@ void display_lcd() {
     lcd_i2c.setCursor(0, 0);  // (row,col)
     lcd_i2c.print("Station meteo");    
     lcd_i2c.setCursor(1, 0);  // (row,col)
-    lcd_i2c.print("Version " + v);         
+    lcd_i2c.print("Version " + v);   
+    lcd_i2c.setCursor(3,0);
+    lcd_i2c.print(now.day(), DEC);
+    lcd_i2c.print('/');
+    lcd_i2c.print(now.month(), DEC);
+    lcd_i2c.print('/');
+    lcd_i2c.print(now.year(), DEC);
+    lcd_i2c.print(' ');
+    lcd_i2c.print(now.hour(), DEC);
+    lcd_i2c.print(':');
+    lcd_i2c.print(now.minute(), DEC);
+    lcd_i2c.print(':');
+    lcd_i2c.print(now.second(), DEC);
     break;
   default: 
     disp_state = 0; // security...
@@ -388,6 +416,14 @@ void setup()
   // interruption by rain gauge
   attachInterrupt (RAINGAUGE_IRQ_NUMBER, irq_raingauge, FALLING);
 
+  // DS1307 clock
+  RTC.begin();
+  /*
+  if (! RTC.isrunning()) {
+   Serial.println("RTC is NOT running!");
+   }
+   */
+
   // LCD Display
   lcd_i2c.init(); 
   lcd_i2c.backlight();
@@ -428,6 +464,9 @@ void loop()
 
   // initialize variable
   debug = "";
+
+  // read date and time
+  now = RTC.now();
 
   // =============================================================
   // READ SENSORS DATA
@@ -505,6 +544,9 @@ void loop()
 //
 // END OF FILE
 //
+
+
+
 
 
 
