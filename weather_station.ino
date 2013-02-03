@@ -1,5 +1,5 @@
-String v = "0.16"; 
-/* Weather station v0.16 by David Réchatin  
+String v = "0.17"; 
+/* Weather station v0.17 by David Réchatin  
  
  Weather station with web connexion
  
@@ -93,6 +93,7 @@ String v = "0.16";
  v0.14 16/12/2012 : add deported LCD display 4x20 (i2c bus)
  v0.15 02/02/2013 : remove LCD display 2x16
  v0.16 03/02/2013 : change windVane data storage
+ v0.17 03/02/2013 : rewriting function : generate and send sata to LCD display
  
  todo list :
  - SD card data logger
@@ -125,25 +126,22 @@ String v = "0.16";
 #define BUTTON_IRQ_NUMBER 5       // PIN 18
 
 // Define other constant
-#define NUMBER_DISP_STATE 3    // number of menu on LCD display
-#define WAIT_LOOP 3000         // time (in milli second) of wait in loop cycle
+#define NUMBER_DISP_STATE 4    // number of menu on LCD display
+#define WAIT_LOOP 5000         // time (in milli second) of wait in loop cycle
 
 // -------------------------------------
 // Variable declaration
 String debug = "" ;       // for debuging
-int disp_state = 1;       // use by interrup 5 : function irq_button()
-String lcd_line1 ;        // line 1 of LCD display
-String lcd_line2 ;        // line 2 of LCD display
-String lcd_line3 ;        // line 3 of LCD display
-String lcd_line4 ;        // line 4 of LCD display
+int disp_state = 0;       // use by interrup 5 : function irq_button()
+char buffer[8];           // buffer for LCD display
 char* tmp_char = " " ;     // temporary variable for increase code lisibilty
-String tmp_string = " " ;  // temporary variable for increase code lisibilty
 unsigned long time = 0 ;  // time
 int i = 0;                // use by loop 'for'
 volatile int countwindSpeed = 0 ;            // count wind speed contact
 unsigned long firstContactTime = 0 ;         // first time of wind speed interupt
 volatile unsigned long lastContactTime = 0 ; // last time of wind speed interupt
 volatile int countRain = 0 ;                 // count rain gauge contact
+
 
 // Measure variables declaration
 float TEMT6000_l = 0 ;   // luminosity
@@ -154,7 +152,7 @@ float SHT15_h = 0 ;      // humdity
 float BMP085_t = 0 ;     // temperature
 float BMP085_p = 0 ;     // pressure
 float windVaneDeg = 0 ;  // wind direction degré 
-String windVaneStr = " " ;  // wind direction string 
+char* windVaneStr = " " ;  // wind direction string 
 float windSpeed = 0 ;    // wind speed
 float rainHeight = 0 ;   // height of rain
 float t = 0 ;            // temperature
@@ -188,11 +186,11 @@ EthernetClient client;   // Initialize the Ethernet client library
 
 void getWindVane() {
   float windvaneArrayVal[16] = {
-    73.5, 87.5, 108.5, 155, 215, 266.5, 348, 436, 533, 617.5, 668.5, 746, 809, 860, 918.5, 1023                    }; // median values measured at the analog input  
+    73.5, 87.5, 108.5, 155, 215, 266.5, 348, 436, 533, 617.5, 668.5, 746, 809, 860, 918.5, 1023                                      }; // median values measured at the analog input  
   char *windvaneArrayStr[16] = {
-    "ONO","OSO", "O","NNO", "NO", "NNE", "N", "SSO", "SO", "ENE", "NE", "SSE", "S", "ESE", "SE", "E"                    };  // wind directions
+    "ONO","OSO", "O","NNO", "NO", "NNE", "N", "SSO", "SO", "ENE", "NE", "SSE", "S", "ESE", "SE", "E"                                      };  // wind directions
   float windvaneArrayDeg[16] = {
-    0, 22.5, 45, 67.5, 90, 112.5, 135, 157.5, 180, 202.5, 225, 247.5, 270, 292.5, 315, 337.5                    }; // degre direction  
+    0, 22.5, 45, 67.5, 90, 112.5, 135, 157.5, 180, 202.5, 225, 247.5, 270, 292.5, 315, 337.5                                      }; // degre direction  
   unsigned int val; // analog input value
   byte x;  // index
 
@@ -203,7 +201,8 @@ void getWindVane() {
   }
   // return the wind direction using index
   windVaneDeg = windvaneArrayDeg[x];  // wind degre direction
-  windVaneStr = String(windvaneArrayStr[x]);  // wind string direction 
+  //windVaneStr = String(windvaneArrayStr[x]);  // wind string direction 
+  strcpy(windVaneStr,windvaneArrayStr[x]);
 }
 
 // =============================================================
@@ -231,6 +230,113 @@ float getRainHeight() {
   calc = countRain * 0.2794 ; 
   //countRain = 0;
   return float(calc);
+}
+
+// =============================================================
+// DISPLAY DATA
+void display_lcd() {   
+  lcd_i2c.clear();
+  // -------------------------------------
+  // Generate and send data to lcd display
+  switch (disp_state) { // state of information display
+  case 0: // defaut display
+    // line 1  
+    lcd_i2c.setCursor(0, 0);  // (row,col)
+    lcd_i2c.print("T:");    
+    t = (RTH03_t + SHT15_t + BMP085_t) / 3;  
+    dtostrf(t,1,2,buffer);  // conv. float to char*  
+    lcd_i2c.setCursor(0, 2);  // (row,col)
+    lcd_i2c.print(buffer); 
+    lcd_i2c.setCursor(0, 8);  // (row,col)
+    lcd_i2c.print("*C");  
+    // line 2 
+    lcd_i2c.setCursor(1, 0);  // (row,col)
+    lcd_i2c.print("P:");    
+    dtostrf(BMP085_p,1,1,buffer);  // conv. float to char*  
+    lcd_i2c.setCursor(1, 2);  // (row,col)
+    lcd_i2c.print(buffer); 
+    lcd_i2c.setCursor(1, 8);  // (row,col)
+    lcd_i2c.print("mBar L:");    
+    dtostrf(TEMT6000_l,1,1,buffer);  // conv. float to char*  
+    lcd_i2c.setCursor(1, 15);  // (row,col)
+    lcd_i2c.print(buffer); 
+    lcd_i2c.setCursor(1, 19);  // (row,col)
+    lcd_i2c.print("%");   
+    // line 3 
+    lcd_i2c.setCursor(2, 0);  // (row,col)
+    lcd_i2c.print("V:");    
+    dtostrf(windSpeed,1,1,buffer);  // conv. float to char*  
+    lcd_i2c.setCursor(2, 2);  // (row,col)
+    lcd_i2c.print(buffer); 
+    lcd_i2c.setCursor(2, 7);  // (row,col)
+    lcd_i2c.print("km/h > ");    
+    lcd_i2c.setCursor(2, 14);  // (row,col)
+    lcd_i2c.print(windVaneStr); 
+    // line 4 
+    lcd_i2c.setCursor(3, 0);  // (row,col)
+    lcd_i2c.print("H:");    
+    h = (RTH03_h + SHT15_h) / 2;
+    dtostrf(h,1,1,buffer);  // conv. float to char*  
+    lcd_i2c.setCursor(3, 2);  // (row,col)
+    lcd_i2c.print(buffer); 
+    lcd_i2c.setCursor(3, 6);  // (row,col)
+    lcd_i2c.print("% Pl:");    
+    dtostrf(rainHeight,1,2,buffer);  // conv. float to char*  
+    lcd_i2c.setCursor(3, 11);  // (row,col)
+    lcd_i2c.print(buffer); 
+    lcd_i2c.setCursor(3, 17);  // (row,col)
+    lcd_i2c.print("mm"); 
+    break;
+  case 1: // Temperature detail  
+    // line 1  
+    lcd_i2c.setCursor(0, 0);  // (row,col)
+    lcd_i2c.print("Temperature *C");      
+    // line 2
+    lcd_i2c.setCursor(1, 0);  // (row,col)
+    lcd_i2c.print("RHT03");  
+    dtostrf(RTH03_t,1,2,buffer);  // conv. float to char* 
+    lcd_i2c.setCursor(1, 7);  // (row,col)
+    lcd_i2c.print(buffer);    
+    // line 3
+    lcd_i2c.setCursor(2, 0);  // (row,col)
+    lcd_i2c.print("SHT15");  
+    dtostrf(SHT15_t,1,2,buffer);  // conv. float to char* 
+    lcd_i2c.setCursor(2, 7);  // (row,col)
+    lcd_i2c.print(buffer);    
+    // line 4
+    lcd_i2c.setCursor(3, 0);  // (row,col)
+    lcd_i2c.print("BMP085");  
+    dtostrf(BMP085_t,1,2,buffer);  // conv. float to char* 
+    lcd_i2c.setCursor(3, 7);  // (row,col)
+    lcd_i2c.print(buffer); 
+    break;
+  case 2: // Humidity detail  
+    // line 1  
+    lcd_i2c.setCursor(0, 0);  // (row,col)
+    lcd_i2c.print("Humidite %");      
+    // line 2
+    lcd_i2c.setCursor(1, 0);  // (row,col)
+    lcd_i2c.print("RTH03");  
+    dtostrf(RTH03_h,1,2,buffer);  // conv. float to char* 
+    lcd_i2c.setCursor(1, 7);  // (row,col)
+    lcd_i2c.print(buffer);    
+    // line 3
+    lcd_i2c.setCursor(2, 0);  // (row,col)
+    lcd_i2c.print("SHT15");  
+    dtostrf(SHT15_h,1,2,buffer);  // conv. float to char* 
+    lcd_i2c.setCursor(2, 7);  // (row,col)
+    lcd_i2c.print(buffer);    
+    break;
+  case 3: // information
+    lcd_i2c.setCursor(0, 0);  // (row,col)
+    lcd_i2c.print("Station meteo");    
+    lcd_i2c.setCursor(1, 0);  // (row,col)
+    lcd_i2c.print("Version " + v);         
+    break;
+  default: 
+    disp_state = 0; // security...
+  }
+  lcd_i2c.cursor_off();
 }
 
 // =============================================================
@@ -269,8 +375,8 @@ void irq_raingauge() // interrupt 1
 // BEGIN SETUP
 void setup()
 {
-  Serial.begin(9600);
-  Serial.println("Setup begin");
+  //Serial.begin(9600);
+  //Serial.println("Setup begin");
   pinMode(40, OUTPUT); // define pin of LED reading sensors
 
   // interruption by button
@@ -303,7 +409,7 @@ void setup()
    }
    */
 
-  Serial.println("Setup end");
+  //Serial.println("Setup end");
 }
 // END SETUP
 // ###############################################################################
@@ -315,7 +421,7 @@ void setup()
 // BEGIN LOOP
 void loop()
 {  
-  Serial.println("Loop...");
+  //Serial.println("Loop...");
   digitalWrite(LED_PIN, HIGH);   // turn ON the LED working in progress in loop
 
   // initialize variable
@@ -380,99 +486,8 @@ void loop()
   // read data > rain height
   rainHeight = getRainHeight(); 
 
-  // =============================================================
-  // DISPLAY DATA
-
-  // -------------------------------------
-  // Generate display data for lcd display
-  lcd_line1 = " " ;        // line 1 of LCD display
-  lcd_line2 = " " ;        // line 2 of LCD display
-  lcd_line3 = " " ;        // line 3 of LCD display
-  lcd_line4 = " " ;        // line 4 of LCD display
-  
-  switch (disp_state) { // state of information display
-  case 0: // defaut display
-    lcd_line1 = "T:"; 
-    t = (RTH03_t + SHT15_t + BMP085_t) / 3;
-    tmp_char = " ";
-    dtostrf(t,2,1,tmp_char);  // conv. float to char*
-    lcd_line1 += tmp_char; 
-    lcd_line1 += "*C";
-
-    lcd_line2 = "P:";
-    tmp_char = " ";
-    dtostrf(BMP085_p,4,1,tmp_char);  // conv. float to char*
-    lcd_line2 += tmp_char; 
-    lcd_line2 += "mBar";  
-
-    lcd_line2 += " L:";  
-    tmp_char = " ";  
-    dtostrf(TEMT6000_l,2,1,tmp_char);  // conv. float to char*
-    lcd_line2 += tmp_char; 
-    lcd_line2 += "%"; 
-
-    lcd_line3 = "V:";
-    tmp_char = " ";  
-    dtostrf(windSpeed,2,1,tmp_char);  // conv. float to char*
-    lcd_line3 += tmp_char;    
-    lcd_line3 += "km/h > ";
-    lcd_line3 += windVaneStr;
-
-    lcd_line4 = "H:";    
-    h = (RTH03_h + SHT15_h) / 2;
-    tmp_char = " ";
-    dtostrf(RTH03_h,2,1,tmp_char);  // conv. float to char*
-    lcd_line4 += tmp_char; 
-    lcd_line4 += "%";
-
-    lcd_line4 += " Pl:";
-    tmp_char = " ";
-    dtostrf(rainHeight,2,2,tmp_char);  // conv. float to char*
-    lcd_line4 += tmp_char;
-    lcd_line4 += " mm";
-    break;
-  case 1: // detail of Temperature and Humidity
-    lcd_line1 = "Temperature *C"; 
-    tmp_char = " ";
-    dtostrf(RTH03_t,2,1,tmp_char);  // conv. float to char*
-    lcd_line2 = tmp_char; 
-    lcd_line2 += " & ";
-    tmp_char = " ";
-    dtostrf(SHT15_t,2,1,tmp_char);  // conv. float to char*
-    lcd_line2 += tmp_char;  
-    lcd_line2 += " & ";
-    tmp_char = " ";
-    dtostrf(BMP085_t,2,1,tmp_char);  // conv. float to char*
-    lcd_line2 += tmp_char;   
-    lcd_line3 = "Humidite %";
-    tmp_char = " ";
-    dtostrf(RTH03_h,2,1,tmp_char);  // conv. float to char*
-    lcd_line4 = tmp_char;  
-    lcd_line4 += " & ";
-    tmp_char = " ";
-    dtostrf(SHT15_h,2,1,tmp_char);  // conv. float to char*
-    lcd_line4 += tmp_char;  
-    break;
-  case 2: 
-    lcd_line1 = "Station meteo";
-    lcd_line2 = "version " + v; 
-    break;
-  default: 
-    disp_state = 0; // security...
-  }
-
-  // -------------------------------------
-  // Send data to LCD display
-  lcd_i2c.clear();
-  lcd_i2c.setCursor(0, 0);  // (row,col)
-  lcd_i2c.print(lcd_line1);
-  lcd_i2c.setCursor(1, 0);  // (row,col)
-  lcd_i2c.print(lcd_line2); 
-  lcd_i2c.setCursor(2, 0);  // (row,col)
-  lcd_i2c.print(lcd_line3); 
-  lcd_i2c.setCursor(3, 0);  // (row,col)
-  lcd_i2c.print(lcd_line4); 
-  lcd_i2c.cursor_off();
+  // generate and send data to display
+  display_lcd();
 
   // =============================================================
   // OTHER TREATMENTS
@@ -488,6 +503,15 @@ void loop()
 //
 // END OF FILE
 //
+
+
+
+
+
+
+
+
+
 
 
 
