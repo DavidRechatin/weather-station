@@ -1,5 +1,5 @@
-String v = "0.19"; 
-/* Weather station v0.19 by David Réchatin  
+String v = "0.20"; 
+/* Weather station v0.20 by David Réchatin  
  
  Weather station with web connexion
  
@@ -67,10 +67,7 @@ String v = "0.19";
  LCD display 20x4 (Hitachi 44780 compatible - I2C bus)
  * 5V  connection of the sensor attached to +5V
  * S connection of the sensor attached to digital pin 21 > I2C bus
- * D  connection of the sensor at3
- 
- 3
- tached to digital pin 20 > I2C bus
+ * D  connection of the sensor attached to digital pin 20 > I2C bus
  * GND  connection of the sensor attached to ground
  
  http://www.rechatin.com/
@@ -99,6 +96,7 @@ String v = "0.19";
  v0.17 03/02/2013 : rewriting function : generate and send sata to LCD display
  v0.18 03/02/2013 : adjust RHT03 temperature value
  v0.19 03/02/2013 : add 'Data logger SD card' shield with DS1307 clock > active DS1307
+ v0.20 03/02/2013 : various optimizations
  
  todo list :
  - SD card data logger
@@ -124,7 +122,7 @@ String v = "0.19";
 #define SHT15_DATA_PIN  28   // SHT15 sensor
 #define SHT15_SCK_PIN 29     // SHT15 sensor
 #define WINDVANE_PIN 9       // Wind vane sensor > analog
-#define LED_PIN 40
+#define LED_PIN 40           // LED working in progress in loop
 
 // Define IRQ constant
 #define windSpeed_IRQ_NUMBER 0    // PIN 2
@@ -140,12 +138,12 @@ String v = "0.19";
 String debug = "" ;       // for debuging
 int disp_state = 0;       // use by interrup 5 : function irq_button()
 char buffer[8];           // buffer for LCD display
-char* tmp_char = " " ;     // temporary variable for increase code lisibilty
+char* tmp_char = " " ;    // temporary variable for increase code lisibilty
 volatile int countwindSpeed = 0 ;            // count wind speed contact
 unsigned long firstContactTime = 0 ;         // first time of wind speed interupt
 volatile unsigned long lastContactTime = 0 ; // last time of wind speed interupt
 volatile int countRain = 0 ;                 // count rain gauge contact
-DateTime now ;
+DateTime now ;            // current date and time storage
 
 // Measure variables declaration
 float TEMT6000_l = 0 ;   // luminosity
@@ -168,17 +166,14 @@ float h = 0 ;            // humdity
 
 // initialize clock : DS1307
 RTC_DS1307 RTC;
-
 // initialize sensor : RHT03 (alias DHT22)
 DHT22 myDHT22(RHT03_DATA_PIN);
-
 // initialize LCD display 4x20 
 CLCD lcd_i2c(0x06,20,4);
 // initialize sensor : SHT15
 SHT1x sht1x(SHT15_DATA_PIN, SHT15_SCK_PIN);
 // initialize sensor : BMP085
 Adafruit_BMP085 bmp;
-
 // Initialize ethernet shield
 byte mac[] = { 
   0x90, 0xA2, 0xDA, 0x0D, 0x80, 0xF3 };  // MAC address printed on a sticker on the shield
@@ -250,59 +245,40 @@ void display_lcd() {
   case 0: // defaut display
     // line 1  
     lcd_i2c.setCursor(0, 0);  // (row,col)
-    lcd_i2c.print("T:");    
+    lcd_i2c.print("T ");    
     t = (RTH03_t + SHT15_t + BMP085_t) / 3;  
-    dtostrf(t,1,2,buffer);  // conv. float to char*  
-    lcd_i2c.setCursor(0, 2);  // (row,col)
-    lcd_i2c.print(buffer); 
-    lcd_i2c.setCursor(0, 8);  // (row,col)
-    lcd_i2c.print("*C");  
-    lcd_i2c.setCursor(0, 12);  // (row,col)
+    lcd_i2c.print(t); 
+    lcd_i2c.print("*C ");  
+    lcd_i2c.setCursor(0, 12);  // (row,col)    
     lcd_i2c.print(now.hour()); 
-    lcd_i2c.setCursor(0, 14);  // (row,col)
     lcd_i2c.print(":"); 
-    lcd_i2c.setCursor(0, 15);  // (row,col)
     lcd_i2c.print(now.minute()); 
-    lcd_i2c.setCursor(0, 17);  // (row,col)
     lcd_i2c.print(":");  
-    lcd_i2c.setCursor(0, 18);  // (row,col)
     lcd_i2c.print(now.second()); 
     // line 2 
     lcd_i2c.setCursor(1, 0);  // (row,col)
-    lcd_i2c.print("P:");    
-    dtostrf(BMP085_p,1,1,buffer);  // conv. float to char*  
-    lcd_i2c.setCursor(1, 2);  // (row,col)
+    lcd_i2c.print("P ");    
+    dtostrf(BMP085_p,1,1,buffer);  // conv. float to char*
     lcd_i2c.print(buffer); 
-    lcd_i2c.setCursor(1, 8);  // (row,col)
-    lcd_i2c.print("mBar L:");    
-    dtostrf(TEMT6000_l,1,1,buffer);  // conv. float to char*  
-    lcd_i2c.setCursor(1, 15);  // (row,col)
+    lcd_i2c.print("mBar L ");    
+    dtostrf(TEMT6000_l,1,1,buffer);  // conv. float to char*
     lcd_i2c.print(buffer); 
-    lcd_i2c.setCursor(1, 19);  // (row,col)
     lcd_i2c.print("%");   
     // line 3 
     lcd_i2c.setCursor(2, 0);  // (row,col)
-    lcd_i2c.print("V:");    
+    lcd_i2c.print("V ");    
     dtostrf(windSpeed,1,1,buffer);  // conv. float to char*  
-    lcd_i2c.setCursor(2, 2);  // (row,col)
     lcd_i2c.print(buffer); 
-    lcd_i2c.setCursor(2, 7);  // (row,col)
     lcd_i2c.print("km/h > ");    
-    lcd_i2c.setCursor(2, 14);  // (row,col)
     lcd_i2c.print(windVaneStr); 
     // line 4 
     lcd_i2c.setCursor(3, 0);  // (row,col)
-    lcd_i2c.print("H:");    
+    lcd_i2c.print("H ");    
     h = (RTH03_h + SHT15_h) / 2;
     dtostrf(h,1,1,buffer);  // conv. float to char*  
-    lcd_i2c.setCursor(3, 2);  // (row,col)
     lcd_i2c.print(buffer); 
-    lcd_i2c.setCursor(3, 6);  // (row,col)
-    lcd_i2c.print("% Pl:");    
-    dtostrf(rainHeight,1,2,buffer);  // conv. float to char*  
-    lcd_i2c.setCursor(3, 11);  // (row,col)
-    lcd_i2c.print(buffer); 
-    lcd_i2c.setCursor(3, 17);  // (row,col)
+    lcd_i2c.print("% Pl ");    
+    lcd_i2c.print(rainHeight); 
     lcd_i2c.print("mm"); 
     break;
   case 1: // Temperature detail  
@@ -311,22 +287,16 @@ void display_lcd() {
     lcd_i2c.print("Temperature *C");      
     // line 2
     lcd_i2c.setCursor(1, 0);  // (row,col)
-    lcd_i2c.print("RHT03");  
-    dtostrf(RTH03_t,1,2,buffer);  // conv. float to char* 
-    lcd_i2c.setCursor(1, 7);  // (row,col)
-    lcd_i2c.print(buffer);    
+    lcd_i2c.print("RHT03  ");  
+    lcd_i2c.print(RTH03_t);    
     // line 3
     lcd_i2c.setCursor(2, 0);  // (row,col)
-    lcd_i2c.print("SHT15");  
-    dtostrf(SHT15_t,1,2,buffer);  // conv. float to char* 
-    lcd_i2c.setCursor(2, 7);  // (row,col)
-    lcd_i2c.print(buffer);    
+    lcd_i2c.print("SHT15  ");  
+    lcd_i2c.print(SHT15_t);    
     // line 4
     lcd_i2c.setCursor(3, 0);  // (row,col)
-    lcd_i2c.print("BMP085");  
-    dtostrf(BMP085_t,1,2,buffer);  // conv. float to char* 
-    lcd_i2c.setCursor(3, 7);  // (row,col)
-    lcd_i2c.print(buffer); 
+    lcd_i2c.print("BMP085 ");  
+    lcd_i2c.print(BMP085_t); 
     break;
   case 2: // Humidity detail  
     // line 1  
@@ -334,16 +304,12 @@ void display_lcd() {
     lcd_i2c.print("Humidite %");      
     // line 2
     lcd_i2c.setCursor(1, 0);  // (row,col)
-    lcd_i2c.print("RTH03");  
-    dtostrf(RTH03_h,1,2,buffer);  // conv. float to char* 
-    lcd_i2c.setCursor(1, 7);  // (row,col)
-    lcd_i2c.print(buffer);    
+    lcd_i2c.print("RTH03 ");  
+    lcd_i2c.print(RTH03_h);    
     // line 3
     lcd_i2c.setCursor(2, 0);  // (row,col)
-    lcd_i2c.print("SHT15");  
-    dtostrf(SHT15_h,1,2,buffer);  // conv. float to char* 
-    lcd_i2c.setCursor(2, 7);  // (row,col)
-    lcd_i2c.print(buffer);    
+    lcd_i2c.print("SHT15 ");  
+    lcd_i2c.print(SHT15_h);    
     break;
   case 3: // information
     lcd_i2c.setCursor(0, 0);  // (row,col)
