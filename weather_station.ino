@@ -1,5 +1,5 @@
-String v = "0.20"; 
-/* Weather station v0.20 by David Réchatin  
+String v = "0.21"; 
+/* Weather station v0.21 by David Réchatin  
  
  Weather station with web connexion
  
@@ -97,6 +97,9 @@ String v = "0.20";
  v0.18 03/02/2013 : adjust RHT03 temperature value
  v0.19 03/02/2013 : add 'Data logger SD card' shield with DS1307 clock > active DS1307
  v0.20 03/02/2013 : various optimizations
+ v0.21 20/05/2013 : add support of SD Card 
+ + sort windvaneArrayDeg[16]
+ + windSpeed bug fixe (create buffer with 13 caractere for sd card filename
  
  todo list :
  - SD card data logger
@@ -114,6 +117,7 @@ String v = "0.20";
 #include <SPI.h>              // require by ethernet shield
 #include <Ethernet.h>         // require by ethernet shield
 #include <RTClib.h>           // require by DS1307 on Data logger SD card shield
+#include <SD.h>               // require by Sd Card on Data logger SD card shield
 
 // -------------------------------------
 // Define PIN constant
@@ -122,6 +126,7 @@ String v = "0.20";
 #define SHT15_DATA_PIN  28   // SHT15 sensor
 #define SHT15_SCK_PIN 29     // SHT15 sensor
 #define WINDVANE_PIN 9       // Wind vane sensor > analog
+#define SD_CARD_CS 53       // SD Card CS Pin  (use 10 for Arduino Uno)
 #define LED_PIN 40           // LED working in progress in loop
 
 // Define IRQ constant
@@ -137,7 +142,8 @@ String v = "0.20";
 // Variable declaration
 String debug = "" ;       // for debuging
 int disp_state = 0;       // use by interrup 5 : function irq_button()
-char buffer[8];           // buffer for LCD display
+char buffer8[8];          // buffer with 8 caracteres
+char buffer13[13];        // buffer with 13 caracteres 
 char* tmp_char = " " ;    // temporary variable for increase code lisibilty
 volatile int countwindSpeed = 0 ;            // count wind speed contact
 unsigned long firstContactTime = 0 ;         // first time of wind speed interupt
@@ -189,11 +195,11 @@ EthernetClient client;   // Initialize the Ethernet client library
 
 void getWindVane() {
   float windvaneArrayVal[16] = {
-    73.5, 87.5, 108.5, 155, 215, 266.5, 348, 436, 533, 617.5, 668.5, 746, 809, 860, 918.5, 1023                                            }; // median values measured at the analog input  
+    73.5, 87.5, 108.5, 155, 215, 266.5, 348, 436, 533, 617.5, 668.5, 746, 809, 860, 918.5, 1023                                              }; // median values measured at the analog input  
   char *windvaneArrayStr[16] = {
-    "ONO","OSO", "O","NNO", "NO", "NNE", "N", "SSO", "SO", "ENE", "NE", "SSE", "S", "ESE", "SE", "E"                                            };  // wind directions
+    "ONO","OSO", "O","NNO", "NO", "NNE", "N", "SSO", "SO", "ENE", "NE", "SSE", "S", "ESE", "SE", "E"                                              };  // wind directions
   float windvaneArrayDeg[16] = {
-    0, 22.5, 45, 67.5, 90, 112.5, 135, 157.5, 180, 202.5, 225, 247.5, 270, 292.5, 315, 337.5                                            }; // degre direction  
+    67.5, 112.5, 90, 22.5, 45, 337.5, 0, 157.5, 135, 292.5, 315, 202.5, 180, 247.5, 225, 270  }; // degre direction  
   unsigned int val; // analog input value
   byte x;  // index
 
@@ -210,7 +216,7 @@ void getWindVane() {
 
 // =============================================================
 // CALCULATION WIND SPEED
-float getwindSpeed() {    
+float getwindSpeed() { 
   float calc = 0 ;
   if (countwindSpeed == 0) // if we haven't contact
   {  
@@ -258,25 +264,25 @@ void display_lcd() {
     // line 2 
     lcd_i2c.setCursor(1, 0);  // (row,col)
     lcd_i2c.print("P ");    
-    dtostrf(BMP085_p,1,1,buffer);  // conv. float to char*
-    lcd_i2c.print(buffer); 
+    dtostrf(BMP085_p,1,1,buffer8);  // conv. float to char*
+    lcd_i2c.print(buffer8); 
     lcd_i2c.print("mBar L ");    
-    dtostrf(TEMT6000_l,1,1,buffer);  // conv. float to char*
-    lcd_i2c.print(buffer); 
+    dtostrf(TEMT6000_l,1,1,buffer8);  // conv. float to char*
+    lcd_i2c.print(buffer8); 
     lcd_i2c.print("%");   
     // line 3 
     lcd_i2c.setCursor(2, 0);  // (row,col)
     lcd_i2c.print("V ");    
-    dtostrf(windSpeed,1,1,buffer);  // conv. float to char*  
-    lcd_i2c.print(buffer); 
+    dtostrf(windSpeed,1,1,buffer8);  // conv. float to char*  
+    lcd_i2c.print(buffer8); 
     lcd_i2c.print("km/h > ");    
     lcd_i2c.print(windVaneStr); 
     // line 4 
     lcd_i2c.setCursor(3, 0);  // (row,col)
     lcd_i2c.print("H ");    
     h = (RTH03_h + SHT15_h) / 2;
-    dtostrf(h,1,1,buffer);  // conv. float to char*  
-    lcd_i2c.print(buffer); 
+    dtostrf(h,1,1,buffer8);  // conv. float to char*  
+    lcd_i2c.print(buffer8); 
     lcd_i2c.print("% Pl ");    
     lcd_i2c.print(rainHeight); 
     lcd_i2c.print("mm"); 
@@ -352,7 +358,6 @@ void irq_windSpeed() // interrupt 0
 {
   countwindSpeed++; 
   lastContactTime = millis();
-  //  Serial.println("Wind speed sensor interuption !");
 }
 
 // =============================================================
@@ -360,7 +365,6 @@ void irq_windSpeed() // interrupt 0
 void irq_raingauge() // interrupt 1
 {   
   countRain++; 
-  //  Serial.println("Rain gauge sensor interuption !");
 }
 
 // END FUNCTIONS
@@ -371,8 +375,8 @@ void irq_raingauge() // interrupt 1
 // BEGIN SETUP
 void setup()
 {
-  //Serial.begin(9600);
-  //Serial.println("Setup begin");
+  Serial.begin(9600);
+  Serial.println("Setup begin");
   pinMode(40, OUTPUT); // define pin of LED reading sensors
 
   // interruption by button
@@ -382,13 +386,22 @@ void setup()
   // interruption by rain gauge
   attachInterrupt (RAINGAUGE_IRQ_NUMBER, irq_raingauge, FALLING);
 
-  // DS1307 clock
+  // DS1307 clock on Data logger SD card shield
   RTC.begin();
   /*
   if (! RTC.isrunning()) {
    Serial.println("RTC is NOT running!");
    }
    */
+
+  // SD Card on Data logger SD card shield
+  //Serial.print("Initializing SD card...");
+  pinMode(SD_CARD_CS, OUTPUT);
+  if (!SD.begin(SD_CARD_CS)) {
+    //Serial.println("Card failed, or not present");
+    return;
+  }
+  //Serial.println("card initialized.");  
 
   // LCD Display
   lcd_i2c.init(); 
@@ -413,7 +426,7 @@ void setup()
    }
    */
 
-  //Serial.println("Setup end");
+  Serial.println("Setup end");
 }
 // END SETUP
 // ###############################################################################
@@ -425,7 +438,7 @@ void setup()
 // BEGIN LOOP
 void loop()
 {  
-  //Serial.println("Loop...");
+  Serial.println("Loop...");
   digitalWrite(LED_PIN, HIGH);   // turn ON the LED working in progress in loop
 
   // initialize variable
@@ -433,6 +446,9 @@ void loop()
 
   // read date and time
   now = RTC.now();
+  
+// #######################################
+// A faire : stocker les infos de now dans des variables sur 2 caractères
 
   // =============================================================
   // READ SENSORS DATA
@@ -496,6 +512,73 @@ void loop()
   // generate and send data to display
   display_lcd();
 
+// #######################################
+// Work on progress
+
+  // Write data on SD Card
+  String dataString = "{\"date\":\"";
+  dataString += now.day();
+  dataString += "/";
+  dataString += now.month();
+  dataString += "/";
+  dataString += now.year();
+  dataString += "\",\"time\":\"";
+  dataString += now.hour();
+  dataString += ":";
+  dataString += now.minute();
+  dataString += ":";
+  dataString += now.second();  
+  dataString += "\",\"TEMT6000_l\":\"";
+  dtostrf(TEMT6000_l,1,1,buffer8);  // conv. float to char*
+  dataString +=  buffer8;  
+  dataString += "\",\"RTH03_t\":\"";
+  dtostrf(RTH03_t,1,1,buffer8);  // conv. float to char*
+  dataString +=  buffer8;
+  dataString += "\",\"RTH03_h\":\"";
+  dtostrf(RTH03_h,1,1,buffer8);  // conv. float to char*
+  dataString +=  buffer8; 
+  dataString += "\",\"SHT15_t\":\"";
+  dtostrf(SHT15_t,1,1,buffer8);  // conv. float to char*
+  dataString +=  buffer8;
+  dataString += "\",\"SHT15_h\":\"";
+  dtostrf(SHT15_h,1,1,buffer8);  // conv. float to char*
+  dataString +=  buffer8; 
+  dataString += "\",\"BMP085_t\":\"";
+  dtostrf(BMP085_t,1,1,buffer8);  // conv. float to char*
+  dataString +=  buffer8;  
+  dataString += "\",\"BMP085_p\":\"";
+  dtostrf(BMP085_p,1,1,buffer8);  // conv. float to char*
+  dataString +=  buffer8;
+  //dataString += "\",\"windVaneDeg\":\"";
+  //dtostrf(windVaneDeg,1,1,buffer8);  // conv. float to char*
+  //dataString +=  buffer8;
+  dataString += "\",\"windSpeed\":\"";
+  dtostrf(windSpeed,1,1,buffer8);  // conv. float to char*
+  dataString +=  buffer8;
+  dataString += "\",\"rainHeight\":\"";
+  dtostrf(rainHeight,1,1,buffer8);  // conv. float to char*
+  dataString +=  buffer8;
+  dataString += "\"";
+  dataString += "}";
+
+  String fileName = "";
+  fileName += now.year();
+  fileName += now.month();
+  fileName += now.day();
+  fileName += ".txt";  
+  fileName.toCharArray(buffer13, 13); 
+
+  File dataFile = SD.open(buffer13, FILE_WRITE);
+  if (dataFile) {
+    dataFile.println(dataString);
+    dataFile.close();
+    Serial.println(dataString);
+  }  
+  else {
+    Serial.println("error opening ");
+    Serial.println(fileName);
+  } 
+
   // =============================================================
   // OTHER TREATMENTS
   digitalWrite(LED_PIN, LOW);   // turn OFF the LED working in progress in loop
@@ -510,6 +593,7 @@ void loop()
 //
 // END OF FILE
 //
+
 
 
 
